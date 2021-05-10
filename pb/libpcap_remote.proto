@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+option go_package = "github.com/SPROgster/libpcap_remote/v3/pb";
+
+package pcap_remote;
+
+service PcapRemoteService {
+  rpc ListInterfaces (ListInterfacesRequest) returns (ListInterfacesReply) {}
+}
+
+message ListInterfacesRequest {
+}
+
+message ListInterfacesReply {
+  map<string, Interface> interfaceList = 1;
+
+  message Interface {
+    string name = 1;
+    string description = 2;
+
+//    repeated Addresses addr = 3;
+//
+//    message Addresses {
+//      oneof ip_addr {
+//        fixed32 ip4 = 1;
+//        bytes ip6 = 2;
+//      }
+//
+//      oneof ip_net {
+//        fixed32 net4 = 3;
+//        bytes net6 = 4;
+//      }
+//    }
+  }
+}
