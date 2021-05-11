@@ -28,7 +28,7 @@ func main() {
 	// Contact the server and print out its response.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	r, err := c.ListInterfaces(ctx, &pb.ListInterfacesRequest{})
+	r, err := c.ListInterfaces(ctx, &pb.Empty{})
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
 	}

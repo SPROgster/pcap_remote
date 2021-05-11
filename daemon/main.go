@@ -21,7 +21,31 @@ type daemon struct {
 	pb.UnimplementedPcapRemoteServiceServer
 }
 
-func (d *daemon) ListInterfaces(context.Context, *pb.ListInterfacesRequest) (*pb.ListInterfacesReply, error) {
+// ListInterfaces is fast check for lib and its initialisation
+func ListInterfaces() {
+	devices, err := pcap.FindAllDevs()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if len(devices) == 0 {
+		log.Fatal("No devices for capture")
+	}
+
+	// Print device information
+	log.Println("Devices found:")
+	for _, device := range devices {
+		log.Println("\nName: ", device.Name)
+		log.Println("Description: ", device.Description)
+		log.Println("Devices addresses: ", device.Description)
+		for _, address := range device.Addresses {
+			log.Println("- IP address: ", address.IP)
+			log.Println("- Subnet mask: ", address.Netmask)
+		}
+	}
+}
+
+func (d *daemon) ListInterfaces(context.Context, *pb.Empty) (*pb.ListInterfacesReply, error) {
 	devices, err := pcap.FindAllDevs()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, err.Error())
@@ -42,6 +66,8 @@ func (d *daemon) ListInterfaces(context.Context, *pb.ListInterfacesRequest) (*pb
 }
 
 func main() {
+	ListInterfaces()
+
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
