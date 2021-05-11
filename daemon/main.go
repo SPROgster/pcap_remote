@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/gobuffalo/envy"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -12,8 +13,8 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
-const (
-	port = ":56528"
+var (
+	port = envy.Get("PORT", "56528")
 )
 
 type daemon struct {

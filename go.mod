@@ -3,6 +3,7 @@ module github.com/SPROgster/libpcap_remote/v3
 go 1.14
 
 require (
+	github.com/gobuffalo/envy v1.9.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/gopacket v1.1.19
 	github.com/sirupsen/logrus v1.8.1
