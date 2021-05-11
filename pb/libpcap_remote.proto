@@ -6,6 +6,8 @@ package pcap_remote;
 
 service PcapRemoteService {
   rpc ListInterfaces (Empty) returns (ListInterfacesReply) {}
+  rpc StartCapture (StartCaptureRequest) returns (stream Packet) {}
+  rpc StopCapture (StopCaptureRequest) returns (Empty) {}
 }
 
 message Empty {
@@ -18,4 +20,22 @@ message ListInterfacesReply {
     string name = 1;
     string description = 2;
   }
+}
+
+message StartCaptureRequest {
+  string uuid = 1;
+  string device = 2;
+  uint32 snapshot_len = 3;
+  bool promiscuous = 4;
+  string pcap_filter = 5;
+}
+
+message StopCaptureRequest {
+  string uuid = 1;
+}
+
+message Packet {
+  int64 ts = 1;
+  uint32 vlan = 2;
+  bytes packet = 3;
 }
