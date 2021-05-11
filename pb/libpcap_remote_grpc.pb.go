@@ -18,7 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PcapRemoteServiceClient interface {
-	ListInterfaces(ctx context.Context, in *ListInterfacesRequest, opts ...grpc.CallOption) (*ListInterfacesReply, error)
+	ListInterfaces(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ListInterfacesReply, error)
 }
 
 type pcapRemoteServiceClient struct {
@@ -29,7 +29,7 @@ func NewPcapRemoteServiceClient(cc grpc.ClientConnInterface) PcapRemoteServiceCl
 	return &pcapRemoteServiceClient{cc}
 }
 
-func (c *pcapRemoteServiceClient) ListInterfaces(ctx context.Context, in *ListInterfacesRequest, opts ...grpc.CallOption) (*ListInterfacesReply, error) {
+func (c *pcapRemoteServiceClient) ListInterfaces(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ListInterfacesReply, error) {
 	out := new(ListInterfacesReply)
 	err := c.cc.Invoke(ctx, "/pcap_remote.PcapRemoteService/ListInterfaces", in, out, opts...)
 	if err != nil {
@@ -42,7 +42,7 @@ func (c *pcapRemoteServiceClient) ListInterfaces(ctx context.Context, in *ListIn
 // All implementations must embed UnimplementedPcapRemoteServiceServer
 // for forward compatibility
 type PcapRemoteServiceServer interface {
-	ListInterfaces(context.Context, *ListInterfacesRequest) (*ListInterfacesReply, error)
+	ListInterfaces(context.Context, *Empty) (*ListInterfacesReply, error)
 	mustEmbedUnimplementedPcapRemoteServiceServer()
 }
 
@@ -50,7 +50,7 @@ type PcapRemoteServiceServer interface {
 type UnimplementedPcapRemoteServiceServer struct {
 }
 
-func (UnimplementedPcapRemoteServiceServer) ListInterfaces(context.Context, *ListInterfacesRequest) (*ListInterfacesReply, error) {
+func (UnimplementedPcapRemoteServiceServer) ListInterfaces(context.Context, *Empty) (*ListInterfacesReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListInterfaces not implemented")
 }
 func (UnimplementedPcapRemoteServiceServer) mustEmbedUnimplementedPcapRemoteServiceServer() {}
@@ -67,7 +67,7 @@ func RegisterPcapRemoteServiceServer(s grpc.ServiceRegistrar, srv PcapRemoteServ
 }
 
 func _PcapRemoteService_ListInterfaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListInterfacesRequest)
+	in := new(Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func _PcapRemoteService_ListInterfaces_Handler(srv interface{}, ctx context.Cont
 		FullMethod: "/pcap_remote.PcapRemoteService/ListInterfaces",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PcapRemoteServiceServer).ListInterfaces(ctx, req.(*ListInterfacesRequest))
+		return srv.(PcapRemoteServiceServer).ListInterfaces(ctx, req.(*Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -97,5 +97,5 @@ var PcapRemoteService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "libpcap_remote.proto",
+	Metadata: "pb/libpcap_remote.proto",
 }
