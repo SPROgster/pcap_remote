@@ -151,7 +151,7 @@ func (d *daemon) StartCapture(request *pb.StartCaptureRequest, stream pb.PcapRem
 	}
 }
 
-func (d *daemon) StopCapture(ctx context.Context, in *pb.StopCaptureRequest) (*pb.Empty, error) {
+func (d *daemon) StopCapture(_ context.Context, in *pb.StopCaptureRequest) (*pb.Empty, error) {
 	uuid := in.Uuid
 
 	if work, ok := d.subscribers.Load(uuid); !ok {
