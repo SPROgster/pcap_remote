@@ -125,10 +125,17 @@ func (d *daemon) StartCapture(request *pb.StartCaptureRequest, stream pb.PcapRem
 			p := new(pb.Packet)
 			meta := packet.Metadata()
 
+			p.LinkType = int32(handle.LinkType())
 			p.Ts = meta.Timestamp.Unix()
+			p.CaptureLength = int32(meta.CaptureLength)
+			p.Length = int32(meta.Length)
+			p.InterfaceIndex = int32(meta.InterfaceIndex)
 			p.Vlan = 0
 
-			copy(p.Packet, packet.Data())
+			payload := packet.Data()
+			p.Payload = make([]byte, len(payload))
+
+			copy(p.Payload, payload)
 			err = stream.Send(p)
 			if err != nil {
 				return err

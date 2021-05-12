@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/SPROgster/libpcap_remote/v3/pb";
+option go_package = "pb";
 
 package pcap_remote;
 
@@ -35,7 +35,16 @@ message StopCaptureRequest {
 }
 
 message Packet {
-  int64 ts = 1;
-  uint32 vlan = 2;
-  bytes packet = 3;
+  int32 linkType = 1;
+  int64 ts = 2;
+  int32 captureLength = 3;
+  // Length is the size of the original packet.  Should always be >=
+  // CaptureLength.
+  int32 length = 4;
+  // InterfaceIndex
+  int32 InterfaceIndex = 5;
+  bytes payload = 6;
+
+  // Aux data
+  uint32 vlan = 7;
 }
