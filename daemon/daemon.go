@@ -126,7 +126,7 @@ func (d *daemon) StartCapture(request *pb.StartCaptureRequest, stream pb.PcapRem
 			meta := packet.Metadata()
 
 			p.LinkType = int32(handle.LinkType())
-			p.Ts = meta.Timestamp.Unix()
+			p.Ts = meta.Timestamp.UnixNano()
 			p.CaptureLength = int32(meta.CaptureLength)
 			p.Length = int32(meta.Length)
 			p.InterfaceIndex = int32(meta.InterfaceIndex)
