@@ -25,13 +25,14 @@ var (
 )
 
 type client struct {
+	DeviceDescription
 	conn    *grpc.ClientConn
 	service pb.PcapRemoteServiceClient
 	uuid    *uuid.UUID
 }
 
 var (
-	clientList  = map[string]*client{}
+	clientList  = map[string]client{}
 	iface       = "any"
 	pcapfilter  = ""
 	promisc     = false
@@ -120,17 +121,17 @@ func stopCapture() {
 	}
 }
 
-func connect(address string) {
+func connect(name string, address string) {
 	if !strings.Contains(address, ":") {
 		address = address + ":" + port
 	}
 
-	if _, exists := clientList[address]; exists {
+	if _, exists := clientList[name]; exists {
 		fmt.Printf("`%s` already connected\n", address)
 		return
 	}
 
-	uuid, err := uuid.NewV4()
+	u, err := uuid.NewV4()
 	if err != nil {
 		log.Errorf("Unable to generate UUID for address %s", address)
 		return
@@ -142,11 +143,14 @@ func connect(address string) {
 		log.WithField("error", err).Errorf("did not connect to %s: %v", address, err)
 	}
 	service := pb.NewPcapRemoteServiceClient(conn)
-
-	clientList[address] = &client{
-		conn:    conn,
-		service: service,
-		uuid:    uuid,
+	
+	clientList[name] = client{
+		DeviceDescription: DeviceDescription{
+			Address: address,
+		},
+		conn:              conn,
+		service:           service,
+		uuid:              u,
 	}
 }
 
@@ -167,7 +171,22 @@ func disconnect(address string) {
 	delete(clientList, address)
 }
 
+func initConfig() {
+	c := NewConfig()
+	if err := c.Load(); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	clientList = make(map[string]client)
+	for n, v := range c.Devices {
+		connect(n, v.Address)
+	}
+}
+
 func main() {
+	initConfig()
+
 	c := cli.NewCli()
 
 	// start
@@ -194,23 +213,27 @@ func main() {
 		Help: "list current devices",
 		Func: func(args []string) {
 			fmt.Println("Current devices:")
-			for _, v := range clientList {
-				fmt.Printf("		%s\n", v.conn.Target())
+			for name, v := range clientList {
+				fmt.Printf("		%s : %s\n", name, v.Address)
 			}
 			fmt.Println("")
 		},
 		SubCommands: []command.Command{
 			{
 				Name: "add",
-				Help: "add device address to capture",
+				Help: "add <name> <address:[port]> - add device address to capture",
 				Func: func(args []string) {
-					if len(args) == 0 {
-						fmt.Println("address needed")
-						return
+					if len(args)%2 != 0 {
+						fmt.Println("Invalid arguments count")
 					}
 
-					for _, v := range args {
-						connect(v)
+					name := ""
+					for i, v := range args {
+						if i%2 == 0 {
+							name = v
+						} else {
+							connect(name, v)
+						}
 					}
 				},
 				SubCommands: nil,
@@ -281,6 +304,48 @@ func main() {
 			default:
 				fmt.Println("Invalid arg count")
 			}
+		},
+	})
+
+	// Config
+	c.AddCommand(command.Command{
+		Name:        "config",
+		Help:        "",
+		Func:        nil,
+		SubCommands: []command.Command{
+			{
+				Name:        "save",
+				Help:        "",
+				Func: func(args []string) {
+					if len(args) != 0 {
+						fmt.Println("Extra arguments")
+						return
+					}
+
+					dl := make(DeviceList, len(clientList))
+					for n, v := range clientList {
+						dl[n] = v.DeviceDescription
+					}
+					c := &Config{
+						Devices: dl,
+					}
+					if err := c.Save(); err != nil {
+						fmt.Println(err)
+					}
+				},
+				SubCommands: nil,
+			},
+			{
+				Name: "load",
+				Func: func(args []string) {
+					if len(args) != 0 {
+						fmt.Println("Extra arguments")
+						return
+					}
+
+					initConfig()
+				},
+			},
 		},
 	})
 
