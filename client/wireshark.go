@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/SPROgster/libpcap_remote/v3/pb"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
@@ -9,17 +10,30 @@ import (
 )
 
 type Wireshark struct {
-	Writer     net.Conn
-	FinishChan chan bool
+	PacketChannel <- chan *pb.Packet
+	pcapFormat    *PcapFormat
+	writer        wiresharkWriter
+	DoCapture     chan bool
+	conn          net.Conn
 }
 
-func WiresharkWriter() (*Wireshark, error) {
-	res := &Wireshark{
-		Writer:     nil,
-		FinishChan: make(chan bool),
+type wiresharkWriter struct {
+	wireshark        *Wireshark
+	connectionClosed chan bool
+}
+
+func WiresharkWriter(snapLen uint32) (*Wireshark, error) {
+	w := &Wireshark{
+		DoCapture:     make(chan bool),
+		PacketChannel: make(chan *pb.Packet, 256),
+		conn:          nil,
 	}
 
-	connectionChan := make(chan bool)
+	w.writer = wiresharkWriter{
+		wireshark:        w,
+		connectionClosed: make(chan bool),
+	}
+
 	appChan := make(chan bool)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -27,46 +41,107 @@ func WiresharkWriter() (*Wireshark, error) {
 		return nil, err
 	}
 
+	log.WithField("wireshark_addr", listener.Addr().String()).Debug("starting wireshark")
+	wiresharkApp := exec.Command("wireshark", "-k", "-i", "TCP@"+listener.Addr().String())
+	err = wiresharkApp.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	// Watch wireshark app
 	go func() {
-		log.WithField("wireshark_addr", listener.Addr().String()).Debug("starting wireshark")
-		wireshark := exec.Command("wireshark", "-k", "-i", "TCP@"+listener.Addr().String())
-		wireshark.Start()
-		wireshark.Wait()
+		_ = wiresharkApp.Wait()
 		close(appChan)
 		log.WithField("wireshark_addr", listener.Addr().String()).Debug("wireshark closed")
 	}()
 
-	wiresharkSocket, err := listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	res.Writer = wiresharkSocket
-
+	// Process connections
 	go func() {
-		for {
-			one := make([]byte, 1)
-			wiresharkSocket.SetReadDeadline(time.Now())
-			if _, err := wiresharkSocket.Read(one); err == io.EOF {
-				log.Debug("%s detected closed wireshark connection", wiresharkSocket.LocalAddr().String())
-				wiresharkSocket.Close()
-				wiresharkSocket = nil
-				close(connectionChan)
-			} else {
-				wiresharkSocket.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+		defer func() {
+			err := listener.Close()
+			if err != nil {
+				log.Error(err)
 			}
+		}()
+		for {
+			var err error
+			w.conn, err = listener.Accept()
+			if err != nil {
+				log.WithField("wireshark_addr", listener.Addr().String()).Error(err)
+				return
+			}
+
+			w.DoCapture <- true
+
+			w.pcapFormat = NewPcapFormat(&w.writer, snapLen)
+
+			if err := w.processConnection(appChan); err != nil {
+				w.CloseConnection()
+				return
+			}
+			w.DoCapture <- false
+			w.CloseConnection()
 		}
 	}()
 
-	go func() {
+	return w, nil
+}
+
+func (w *Wireshark) processConnection(appChan chan bool) error {
+	for {
+		// Check if wiresharkApp wiresharkApp closed
 		select {
 		case <-appChan:
 			log.Debug("Wireshark closed")
-			close(res.FinishChan)
-		case <-connectionChan:
-			log.Debug("Connection closed")
-			close(res.FinishChan)
-		}
-	}()
+			close(w.DoCapture)
+			return io.EOF
 
-	return res, nil
+		case <-w.writer.connectionClosed:
+			log.Debug("Wireshark stopped dump")
+			return nil
+
+		case packet, ok := <-w.PacketChannel:
+			if !ok {
+				return io.EOF
+			}
+			if err := w.pcapFormat.WritePacket(packet); err != nil {
+				log.Error(err)
+				return nil
+			}
+
+		default:
+			timeout := time.Now().Add(10 * time.Millisecond)
+
+			// Check for socket closure
+			one := make([]byte, 256)
+			if err := w.conn.SetReadDeadline(timeout); err == io.EOF {
+				log.Debug("%s detected closed wireshark connection", w.conn.LocalAddr().String())
+				return nil
+			}
+			if _, err := w.conn.Read(one); err == io.EOF {
+				log.Debug("%s detected closed wireshark connection", w.conn.LocalAddr().String())
+				return nil
+			}
+		}
+	}
+}
+
+func (w *wiresharkWriter) Write(p []byte) (n int, err error) {
+	if w.wireshark.conn == nil {
+		return 0, io.EOF
+	}
+
+	n, err = w.wireshark.conn.Write(p)
+	if err != nil {
+		close(w.connectionClosed)
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+func (w *Wireshark) CloseConnection() {
+	if w.conn != nil {
+		_ = w.conn.Close()
+		w.conn = nil
+	}
 }

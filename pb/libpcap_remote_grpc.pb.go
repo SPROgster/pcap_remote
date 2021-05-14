@@ -41,7 +41,7 @@ func (c *pcapRemoteServiceClient) ListInterfaces(ctx context.Context, in *Empty,
 }
 
 func (c *pcapRemoteServiceClient) StartCapture(ctx context.Context, in *StartCaptureRequest, opts ...grpc.CallOption) (PcapRemoteService_StartCaptureClient, error) {
-	stream, err := c.cc.NewStream(ctx, &PcapRemoteService_ServiceDesc.Streams[0], "/pcap_remote.PcapRemoteService/StartCapture", opts...)
+	stream, err := c.cc.NewStream(ctx, &PcapRemoteService_ServiceDesc.Streams[0], "/pcap_remote.PcapRemoteService/DoCapture", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (UnimplementedPcapRemoteServiceServer) ListInterfaces(context.Context, *Emp
 	return nil, status.Errorf(codes.Unimplemented, "method ListInterfaces not implemented")
 }
 func (UnimplementedPcapRemoteServiceServer) StartCapture(*StartCaptureRequest, PcapRemoteService_StartCaptureServer) error {
-	return status.Errorf(codes.Unimplemented, "method StartCapture not implemented")
+	return status.Errorf(codes.Unimplemented, "method DoCapture not implemented")
 }
 func (UnimplementedPcapRemoteServiceServer) StopCapture(context.Context, *StopCaptureRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopCapture not implemented")
@@ -192,7 +192,7 @@ var PcapRemoteService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "StartCapture",
+			StreamName:    "DoCapture",
 			Handler:       _PcapRemoteService_StartCapture_Handler,
 			ServerStreams: true,
 		},

@@ -7,9 +7,6 @@ import (
 	"github.com/AlexsJones/cli/command"
 	"github.com/SPROgster/libpcap_remote/v3/pb"
 	"github.com/gobuffalo/envy"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcapgo"
 	uuid "github.com/nu7hatch/gouuid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -22,7 +19,7 @@ import (
 )
 
 var (
-	port        = envy.Get("PCAP_REMOTE_PORT", "56528")
+	port = envy.Get("PCAP_REMOTE_PORT", "56528")
 )
 
 type client struct {
@@ -30,19 +27,30 @@ type client struct {
 	finish  chan bool
 	conn    *grpc.ClientConn
 	service pb.PcapRemoteServiceClient
+}
+
+type captureWorkEntry struct {
+	c      *client
+	finish chan bool
+}
+
+type captureWork struct {
 	uuid    *uuid.UUID
+	clients []*captureWorkEntry
+	stream  chan *pb.Packet
+	w       *Wireshark
 }
 
 var (
-	clientList  = map[string]client{}
-	iface       = "any"
-	pcapfilter  = ""
-	promisc     = false
-	snapshotlen = uint32(9000)
-	count       = uint64(0)
+	clientList = map[string]client{}
+	iface      = "any"
+	pcapfilter = ""
+	promisc    = false
+	snaplen    = uint32(9000)
+	count      = uint64(0)
 )
 
-func (c *client) startDump() {
+func (c *client) startDump(cw *captureWork) {
 	// Contact the server and print out its response.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -50,24 +58,16 @@ func (c *client) startDump() {
 	defer cancel2()
 
 	receiver, err := c.service.StartCapture(ctx2, &pb.StartCaptureRequest{
-		Uuid:        c.uuid.String(),
+		Uuid:        cw.uuid.String(),
 		Device:      iface,
-		SnapshotLen: snapshotlen,
+		SnapshotLen: snaplen,
 		Promiscuous: promisc,
 		PcapFilter:  pcapfilter,
 	})
 	if err != nil {
-		log.Fatalf("could not greet: %v", err)
+		log.WithField("addr", c.Address).Error(err)
+		return
 	}
-
-	wireshark, err := WiresharkWriter()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	writer := pcapgo.NewWriter(wireshark.Writer)
-
-	linkType := false
 
 	go func() {
 		ctx = receiver.Context()
@@ -80,67 +80,88 @@ func (c *client) startDump() {
 				if err != nil {
 					log.WithField("error", err).Fatal("Error occurred")
 				}
-				if linkType == false {
-					if err = writer.WriteFileHeader(9000, layers.LinkType(packet.LinkType)); err != nil {
-						log.Fatal(err)
-					}
-					linkType = true
-				}
-
-				ci := gopacket.CaptureInfo{
-					Timestamp:      time.Unix(packet.Ts/time.Second.Nanoseconds(), packet.Ts%time.Second.Nanoseconds()),
-					CaptureLength:  int(packet.CaptureLength),
-					Length:         int(packet.Length),
-					InterfaceIndex: int(packet.InterfaceIndex),
-					AncillaryData:  nil,
-				}
-
-				{
-					c := make(chan os.Signal)
-					defer close(c)
-					signal.Notify(c, os.Interrupt, syscall.SIGPIPE)
-					if err = writer.WritePacket(ci, packet.Payload); err != nil {
-						log.Error(err)
-						break
-					}
-				}
+				cw.stream <- packet
 			}
 		}
 	}()
 
 	select {
 	case <-c.finish:
-		c.service.StopCapture(ctx, &pb.StopCaptureRequest{Uuid: c.uuid.String()})
-		close(wireshark.FinishChan)
+		_, err := c.service.StopCapture(ctx, &pb.StopCaptureRequest{Uuid: cw.uuid.String()})
+		if err != nil {
+			log.WithField("command", "stop capture").WithField("client", c.Address).Error(err)
+			return
+		}
 		return
-
-	case <-wireshark.FinishChan:
-		c.service.StopCapture(ctx, &pb.StopCaptureRequest{Uuid: c.uuid.String()})
 	}
-}
-
-func (c *client) stopDump() {
-	// Contact the server and print out its response.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	c.service.StopCapture(ctx, &pb.StopCaptureRequest{Uuid: c.uuid.String()})
 }
 
 func startCapture() {
-	c := make(chan os.Signal)
-	defer close(c)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	signalChan := make(chan os.Signal)
+	defer close(signalChan)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
-	for _, c := range clientList {
-		c.finish = make(chan bool)
-		go c.startDump()
+	wireshark, err := WiresharkWriter(snaplen)
+	if err != nil {
+		fmt.Println(err)
 	}
 
-	select {
-	case <- c:
+	for {
+		u, err := uuid.NewV4()
+		if err != nil {
+			log.Errorf("Unable to generate UUID")
+			return
+		}
+
+		stream := make(chan *pb.Packet, 256)
+
+		wireshark.PacketChannel = stream
+
+		cw := captureWork{
+			clients: make([]*captureWorkEntry, 0, len(clientList)),
+			w:       wireshark,
+			uuid:    u,
+			stream:  stream,
+		}
+
+		// in case of multiple false after wireshark stop
+		for {
+			capture, ok := <-wireshark.DoCapture
+			if !ok {
+				return
+			}
+			if capture {
+				break
+			}
+		}
+
 		for _, c := range clientList {
-			close(c.finish)
+			cwe := &captureWorkEntry{
+				c:      &c,
+				finish: make(chan bool),
+			}
+			cw.clients = append(cw.clients, cwe)
+			go c.startDump(&cw)
+		}
+
+		select {
+		case <-signalChan:
+			for _, c := range clientList {
+				close(c.finish)
+				close(stream)
+				return
+			}
+		case capture, ok := <-wireshark.DoCapture:
+			if ok && capture {
+				continue
+			}
+			for _, c := range clientList {
+				close(c.finish)
+			}
+			if !ok {
+				return
+			}
+			close(stream)
 		}
 	}
 }
@@ -155,44 +176,34 @@ func connect(name string, address string) {
 		return
 	}
 
-	u, err := uuid.NewV4()
-	if err != nil {
-		log.Errorf("Unable to generate UUID for address %s", address)
-		return
-	}
-
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.WithField("error", err).Errorf("did not connect to %s: %v", address, err)
 	}
 	service := pb.NewPcapRemoteServiceClient(conn)
-	
+
 	clientList[name] = client{
 		DeviceDescription: DeviceDescription{
 			Address: address,
 		},
-		conn:              conn,
-		service:           service,
-		uuid:              u,
+		conn:    conn,
+		service: service,
 	}
 }
 
-func disconnect(address string) {
-	if !strings.Contains(address, ":") {
-		address = address + ":" + port
-	}
-
-	if _, exists := clientList[address]; exists {
-		fmt.Printf("address `%s` not exists\n", address)
+func disconnect(name string) {
+	if _, exists := clientList[name]; exists {
+		fmt.Printf("address `%s` not exists\n", name)
 		return
 	}
 
-	a := clientList[address]
+	a := clientList[name]
+	delete(clientList, name)
+
 	if err := a.conn.Close(); err != nil {
-		log.WithField("address", address).Error(err)
+		log.WithField("name", name).Error(err)
 	}
-	delete(clientList, address)
 }
 
 func initConfig() {
@@ -322,15 +333,39 @@ func main() {
 		},
 	})
 
-	// Config
 	c.AddCommand(command.Command{
-		Name:        "config",
+		Name:        "promisc",
 		Help:        "",
 		Func:        nil,
 		SubCommands: []command.Command{
 			{
-				Name:        "save",
+				Name:        "true",
 				Help:        "",
+				Func: func(args []string) {
+					promisc = true
+				},
+				SubCommands: nil,
+			},
+			{
+				Name:        "false",
+				Help:        "",
+				Func: func(args []string) {
+					promisc = false
+				},
+				SubCommands: nil,
+			},
+		},
+	})
+
+	// Config
+	c.AddCommand(command.Command{
+		Name: "config",
+		Help: "",
+		Func: nil,
+		SubCommands: []command.Command{
+			{
+				Name: "save",
+				Help: "",
 				Func: func(args []string) {
 					if len(args) != 0 {
 						fmt.Println("Extra arguments")
