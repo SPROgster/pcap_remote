@@ -13,19 +13,21 @@ import (
 	uuid "github.com/nu7hatch/gouuid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
 var (
-	address     = envy.Get("ADDRESS", "localhost")
-	port        = envy.Get("PORT", "56528")
-	addressPort = address + ":" + port
+	port        = envy.Get("PCAP_REMOTE_PORT", "56528")
 )
 
 type client struct {
 	DeviceDescription
+	finish  chan bool
 	conn    *grpc.ClientConn
 	service pb.PcapRemoteServiceClient
 	uuid    *uuid.UUID
@@ -96,6 +98,11 @@ func (c *client) startDump() {
 	}()
 
 	select {
+	case <-c.finish:
+		c.service.StopCapture(ctx, &pb.StopCaptureRequest{Uuid: c.uuid.String()})
+		close(wireshark.FinishChan)
+		return
+
 	case <-wireshark.FinishChan:
 		c.service.StopCapture(ctx, &pb.StopCaptureRequest{Uuid: c.uuid.String()})
 	}
@@ -110,8 +117,20 @@ func (c *client) stopDump() {
 }
 
 func startCapture() {
+	c := make(chan os.Signal)
+	defer close(c)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
 	for _, c := range clientList {
+		c.finish = make(chan bool)
 		go c.startDump()
+	}
+
+	select {
+	case <- c:
+		for _, c := range clientList {
+			close(c.finish)
+		}
 	}
 }
 
