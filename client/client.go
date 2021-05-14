@@ -70,29 +70,40 @@ func (c *client) startDump() {
 	linkType := false
 
 	go func() {
+		ctx = receiver.Context()
 		for {
 			packet, err := receiver.Recv()
-			if err != nil {
-				log.WithField("error", err).Fatal("Error occurred")
-			}
-			if linkType == false {
-				if err = writer.WriteFileHeader(9000, layers.LinkType(packet.LinkType)); err != nil {
-					log.Fatal(err)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if err != nil {
+					log.WithField("error", err).Fatal("Error occurred")
 				}
-				linkType = true
-			}
+				if linkType == false {
+					if err = writer.WriteFileHeader(9000, layers.LinkType(packet.LinkType)); err != nil {
+						log.Fatal(err)
+					}
+					linkType = true
+				}
 
-			ci := gopacket.CaptureInfo{
-				Timestamp:      time.Unix(packet.Ts/time.Second.Nanoseconds(), packet.Ts%time.Second.Nanoseconds()),
-				CaptureLength:  int(packet.CaptureLength),
-				Length:         int(packet.Length),
-				InterfaceIndex: int(packet.InterfaceIndex),
-				AncillaryData:  nil,
-			}
+				ci := gopacket.CaptureInfo{
+					Timestamp:      time.Unix(packet.Ts/time.Second.Nanoseconds(), packet.Ts%time.Second.Nanoseconds()),
+					CaptureLength:  int(packet.CaptureLength),
+					Length:         int(packet.Length),
+					InterfaceIndex: int(packet.InterfaceIndex),
+					AncillaryData:  nil,
+				}
 
-			if err = writer.WritePacket(ci, packet.Payload); err != nil {
-				log.Error(err)
-				break
+				{
+					c := make(chan os.Signal)
+					defer close(c)
+					signal.Notify(c, os.Interrupt, syscall.SIGPIPE)
+					if err = writer.WritePacket(ci, packet.Payload); err != nil {
+						log.Error(err)
+						break
+					}
+				}
 			}
 		}
 	}()
@@ -131,12 +142,6 @@ func startCapture() {
 		for _, c := range clientList {
 			close(c.finish)
 		}
-	}
-}
-
-func stopCapture() {
-	for _, c := range clientList {
-		go c.stopDump()
 	}
 }
 
@@ -212,15 +217,6 @@ func main() {
 	c.AddCommand(command.Command{
 		Name: "start",
 		Help: "start packet capture",
-		Func: func(args []string) {
-			startCapture()
-		},
-	})
-
-	// stop
-	c.AddCommand(command.Command{
-		Name: "stop",
-		Help: "stop packet capture",
 		Func: func(args []string) {
 			startCapture()
 		},
