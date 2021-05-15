@@ -10,7 +10,7 @@ import (
 )
 
 type Wireshark struct {
-	PacketChannel <- chan *pb.Packet
+	PacketChannel <-chan *pb.Packet
 	pcapFormat    *PcapFormat
 	writer        wiresharkWriter
 	DoCapture     chan bool
@@ -134,8 +134,10 @@ func (w *wiresharkWriter) Write(p []byte) (n int, err error) {
 
 	n, err = w.wireshark.conn.Write(p)
 	if err != nil {
-		close(w.connectionClosed)
-		return n, io.EOF
+		if len(p) != 16 {
+			close(w.connectionClosed)
+			return n, io.EOF
+		}
 	}
 	return n, nil
 }

@@ -37,10 +37,10 @@ type captureWorkJob struct {
 }
 
 type captureWork struct {
-	uuid      *uuid.UUID
-	jobs      []*captureWorkJob
-	stream    chan *pb.Packet
-	w         *Wireshark
+	uuid   *uuid.UUID
+	jobs   []*captureWorkJob
+	stream chan *pb.Packet
+	w      *Wireshark
 }
 
 var (
@@ -54,7 +54,7 @@ var (
 
 func (cw *captureWork) sendPacket(packet *pb.Packet) {
 	// Easy way to bypass grpc.stream.Recv blocking
-	defer func () {
+	defer func() {
 		_ = recover()
 	}()
 	cw.stream <- packet

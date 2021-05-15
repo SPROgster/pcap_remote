@@ -14,7 +14,7 @@ import (
 type PcapFormat struct {
 	writer        *pcapgo.Writer
 	lock          sync.Locker
-	lt			  layers.LinkType
+	lt            layers.LinkType
 	headerWritten bool
 	snapLen       uint32
 }
