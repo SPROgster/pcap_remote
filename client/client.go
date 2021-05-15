@@ -368,69 +368,56 @@ func main() {
 		},
 	})
 
+	// Promisc true
 	c.AddCommand(command.Command{
-		Name: "promisc",
+		Name: "promisc true",
 		Help: "",
-		Func: nil,
-		SubCommands: []command.Command{
-			{
-				Name: "true",
-				Help: "",
-				Func: func(args []string) {
-					promisc = true
-				},
-				SubCommands: nil,
-			},
-			{
-				Name: "false",
-				Help: "",
-				Func: func(args []string) {
-					promisc = false
-				},
-				SubCommands: nil,
-			},
+		Func: func(args []string) {
+			promisc = true
+		},
+	})
+
+	// Promisc false
+	c.AddCommand(command.Command{
+		Name: "promisc false",
+		Help: "",
+		Func: func(args []string) {
+			promisc = false
 		},
 	})
 
 	// Config
 	c.AddCommand(command.Command{
-		Name: "config",
+		Name: "config save",
 		Help: "",
-		Func: nil,
-		SubCommands: []command.Command{
-			{
-				Name: "save",
-				Help: "",
-				Func: func(args []string) {
-					if len(args) != 0 {
-						fmt.Println("Extra arguments")
-						return
-					}
+		Func: func(args []string) {
+			if len(args) != 0 {
+				fmt.Println("Extra arguments")
+				return
+			}
 
-					dl := make(DeviceList, len(clientList))
-					for n, v := range clientList {
-						dl[n] = v.DeviceDescription
-					}
-					c := &Config{
-						Devices: dl,
-					}
-					if err := c.Save(); err != nil {
-						fmt.Println(err)
-					}
-				},
-				SubCommands: nil,
-			},
-			{
-				Name: "load",
-				Func: func(args []string) {
-					if len(args) != 0 {
-						fmt.Println("Extra arguments")
-						return
-					}
+			dl := make(DeviceList, len(clientList))
+			for n, v := range clientList {
+				dl[n] = v.DeviceDescription
+			}
+			c := &Config{
+				Devices: dl,
+			}
+			if err := c.Save(); err != nil {
+				fmt.Println(err)
+			}
+		},
+	})
 
-					initConfig()
-				},
-			},
+	c.AddCommand(command.Command{
+		Name: "config load",
+		Func: func(args []string) {
+			if len(args) != 0 {
+				fmt.Println("Extra arguments")
+				return
+			}
+
+			initConfig()
 		},
 	})
 
