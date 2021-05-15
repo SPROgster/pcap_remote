@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"os/exec"
-	"time"
 )
 
 type Wireshark struct {
@@ -31,7 +30,6 @@ func WiresharkWriter(snapLen uint32) (*Wireshark, error) {
 
 	w.writer = wiresharkWriter{
 		wireshark:        w,
-		connectionClosed: make(chan bool),
 	}
 
 	appChan := make(chan bool)
@@ -92,6 +90,10 @@ func WiresharkWriter(snapLen uint32) (*Wireshark, error) {
 
 func (w *Wireshark) processConnection(appChan chan bool) error {
 	wiresharkAddr := log.Fields{"addr": w.conn.LocalAddr().String(), "remote": w.conn.RemoteAddr().String()}
+	w.writer.connectionClosed = make(chan bool)
+
+	log.Info("Starting wireshark dump")
+
 	for {
 		// Check if wiresharkApp wiresharkApp closed
 		select {
@@ -108,22 +110,13 @@ func (w *Wireshark) processConnection(appChan chan bool) error {
 			if !ok {
 				return io.EOF
 			}
-			if err := w.pcapFormat.WritePacket(packet); err != nil {
+			if err := w.pcapFormat.WritePacket(packet); err == io.EOF {
+				log.Info("Stopped dump from wireshark")
+				w.DoCapture <- false
+				close(w.DoCapture)
+				return io.EOF
+			} else if err != nil {
 				log.WithFields(wiresharkAddr).Error(err)
-				return nil
-			}
-
-		default:
-			timeout := time.Now().Add(10 * time.Millisecond)
-
-			// Check for socket closure
-			one := make([]byte, 256)
-			if err := w.conn.SetReadDeadline(timeout); err == io.EOF {
-				log.WithFields(wiresharkAddr).Debug("detected closed wireshark connection")
-				return nil
-			}
-			if _, err := w.conn.Read(one); err == io.EOF {
-				log.WithFields(wiresharkAddr).Debug("detected closed wireshark connection")
 				return nil
 			}
 		}

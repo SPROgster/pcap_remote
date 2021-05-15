@@ -10,6 +10,8 @@ import (
 	uuid "github.com/nu7hatch/gouuid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"os"
 	"os/signal"
 	"strconv"
@@ -24,21 +26,21 @@ var (
 
 type client struct {
 	DeviceDescription
-	finish  chan bool
 	conn    *grpc.ClientConn
 	service pb.PcapRemoteServiceClient
 }
 
-type captureWorkEntry struct {
+type captureWorkJob struct {
 	c      *client
 	finish chan bool
+	cancel context.CancelFunc
 }
 
 type captureWork struct {
-	uuid    *uuid.UUID
-	clients []*captureWorkEntry
-	stream  chan *pb.Packet
-	w       *Wireshark
+	uuid      *uuid.UUID
+	jobs      []*captureWorkJob
+	stream    chan *pb.Packet
+	w         *Wireshark
 }
 
 var (
@@ -50,14 +52,22 @@ var (
 	count      = uint64(0)
 )
 
-func (c *client) startDump(cw *captureWork) {
-	// Contact the server and print out its response.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second*1500)
-	defer cancel2()
+func (cw *captureWork) sendPacket(packet *pb.Packet) {
+	// Easy way to bypass grpc.stream.Recv blocking
+	defer func () {
+		_ = recover()
+	}()
+	cw.stream <- packet
+}
 
-	receiver, err := c.service.StartCapture(ctx2, &pb.StartCaptureRequest{
+func (cwe *captureWorkJob) startDump(cw *captureWork) {
+	// Contact the server and print out its response.
+	startCtx, cancel := context.WithCancel(context.Background())
+	cwe.cancel = cancel
+
+	finish := make(chan bool)
+
+	receiver, err := cwe.c.service.StartCapture(startCtx, &pb.StartCaptureRequest{
 		Uuid:        cw.uuid.String(),
 		Device:      iface,
 		SnapshotLen: snaplen,
@@ -65,24 +75,52 @@ func (c *client) startDump(cw *captureWork) {
 		PcapFilter:  pcapfilter,
 	})
 	if err != nil {
-		log.WithField("addr", c.Address).Error(err)
+		log.WithField("addr", cwe.c.Address).Error(err)
 		return
 	}
 
 	go func() {
-		packet, err := receiver.Recv()
-		if err != nil {
-			log.WithField("error", err).Fatal("Error occurred")
+		ctx := receiver.Context()
+
+		for {
+			packet, err := receiver.Recv()
+			select {
+			case <-finish:
+				log.WithField("client", cwe.c.Address).Debug("Finishing receiver")
+				return
+
+			case <-ctx.Done():
+				log.WithField("client", cwe.c.Address).Debug("Context done")
+				return
+
+			default:
+				if err != nil {
+					log.WithField("error", err).Error("Error occurred")
+					return
+				}
+				cw.sendPacket(packet)
+			}
 		}
-		cw.stream <- packet
 	}()
 
 	select {
-	case <-c.finish:
-		_, err := c.service.StopCapture(ctx, &pb.StopCaptureRequest{Uuid: cw.uuid.String()})
+	case <-cwe.finish:
+		defer close(finish)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		_, err := cwe.c.service.StopCapture(ctx, &pb.StopCaptureRequest{Uuid: cw.uuid.String()})
 		if err != nil {
-			log.WithField("command", "stop capture").WithField("client", c.Address).Error(err)
-			return
+			s, ok := status.FromError(err)
+			if !ok {
+				log.WithField("command", "stop capture").WithField("client", cwe.c.Address).Error(err)
+				return
+			}
+			if s.Code() == codes.NotFound {
+				log.WithField("command", "stop capture").WithField("client", cwe.c.Address).Debug("Already stopped")
+				return
+			}
 		}
 		return
 	}
@@ -110,10 +148,10 @@ func startCapture() {
 		wireshark.PacketChannel = stream
 
 		cw := captureWork{
-			clients: make([]*captureWorkEntry, 0, len(clientList)),
-			w:       wireshark,
-			uuid:    u,
-			stream:  stream,
+			jobs:   make([]*captureWorkJob, 0, len(clientList)),
+			w:      wireshark,
+			uuid:   u,
+			stream: stream,
 		}
 
 		// in case of multiple false after wireshark stop
@@ -128,34 +166,42 @@ func startCapture() {
 		}
 
 		for _, c := range clientList {
-			cwe := &captureWorkEntry{
+			cwe := &captureWorkJob{
 				c:      &c,
 				finish: make(chan bool),
 			}
-			cw.clients = append(cw.clients, cwe)
-			go c.startDump(&cw)
+			cw.jobs = append(cw.jobs, cwe)
+			go cwe.startDump(&cw)
 		}
 
-		select {
-		case <-signalChan:
-			for _, c := range clientList {
-				close(c.finish)
-				close(stream)
+		for {
+			select {
+			case <-signalChan:
+				log.Debug("Receiver SIGINT")
+				cw.stop()
 				return
+			case capture, ok := <-wireshark.DoCapture:
+				if ok && capture {
+					continue
+				}
+				log.Debug("Stopping capture from frontend")
+				cw.stop()
+
+				if !ok {
+					return
+				}
+				break
 			}
-		case capture, ok := <-wireshark.DoCapture:
-			if ok && capture {
-				continue
-			}
-			for _, c := range clientList {
-				close(c.finish)
-			}
-			if !ok {
-				return
-			}
-			close(stream)
 		}
 	}
+}
+
+func (cw *captureWork) stop() {
+	for _, c := range cw.jobs {
+		close(c.finish)
+		c.cancel()
+	}
+	close(cw.stream)
 }
 
 func connect(name string, address string) {
@@ -328,21 +374,21 @@ func main() {
 	})
 
 	c.AddCommand(command.Command{
-		Name:        "promisc",
-		Help:        "",
-		Func:        nil,
+		Name: "promisc",
+		Help: "",
+		Func: nil,
 		SubCommands: []command.Command{
 			{
-				Name:        "true",
-				Help:        "",
+				Name: "true",
+				Help: "",
 				Func: func(args []string) {
 					promisc = true
 				},
 				SubCommands: nil,
 			},
 			{
-				Name:        "false",
-				Help:        "",
+				Name: "false",
+				Help: "",
 				Func: func(args []string) {
 					promisc = false
 				},

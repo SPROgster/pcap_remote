@@ -5,6 +5,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"sync"
 	"time"
@@ -18,6 +19,10 @@ type PcapFormat struct {
 	snapLen       uint32
 }
 
+var (
+	f = log.Fields{"module": "PcapFormat"}
+)
+
 func NewPcapFormat(writer io.Writer, snapLen uint32) *PcapFormat {
 	return &PcapFormat{
 		writer:        pcapgo.NewWriter(writer),
@@ -30,7 +35,12 @@ func NewPcapFormat(writer io.Writer, snapLen uint32) *PcapFormat {
 func (p *PcapFormat) writeHeader(lt layers.LinkType) error {
 	if !p.headerWritten {
 		err := p.writer.WriteFileHeader(p.snapLen, lt)
+		if err == io.EOF || (err != nil && err.Error() == "EOF") {
+			log.Debug("Underlying writer closed")
+			return io.EOF
+		}
 		if err != nil {
+			log.Debug(err)
 			return err
 		}
 		p.headerWritten = true
@@ -42,7 +52,9 @@ func (p *PcapFormat) WritePacket(packet *pb.Packet) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	if err := p.writeHeader(layers.LinkType(packet.LinkType)); err != nil {
+	if err := p.writeHeader(layers.LinkType(packet.LinkType)); err == io.EOF {
+		return io.EOF
+	} else if err != nil {
 		return err
 	}
 
@@ -55,7 +67,12 @@ func (p *PcapFormat) WritePacket(packet *pb.Packet) error {
 	}
 
 	err := p.writer.WritePacket(ci, packet.Payload)
+	if err == io.EOF || (err != nil && err.Error() == "EOF") {
+		log.Debug("Underlying writer closed")
+		return io.EOF
+	}
 	if err != nil {
+		log.Debug(err)
 		return err
 	}
 
