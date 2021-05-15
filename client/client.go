@@ -260,8 +260,6 @@ func initConfig() {
 func main() {
 	initConfig()
 
-	log.SetLevel(log.DebugLevel)
-
 	c := cli.NewCli()
 
 	// start

@@ -105,6 +105,7 @@ func (w *Wireshark) processConnection(appChan chan bool) error {
 
 		case <-w.writer.connectionClosed:
 			log.WithFields(wiresharkAddr).Debug("Wireshark stopped dump")
+			close(w.DoCapture)
 			return nil
 
 		case packet, ok := <-w.PacketChannel:
@@ -113,7 +114,7 @@ func (w *Wireshark) processConnection(appChan chan bool) error {
 			}
 			if err := w.pcapFormat.WritePacket(packet); err == io.EOF {
 				fmt.Println("Stopped dump from wireshark")
-				w.DoCapture <- false
+				//w.DoCapture <- false
 				close(w.DoCapture)
 				return io.EOF
 			} else if err != nil {
