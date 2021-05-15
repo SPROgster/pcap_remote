@@ -187,10 +187,7 @@ func startCapture() {
 				log.Debug("Stopping capture from frontend")
 				cw.stop()
 
-				if !ok {
-					return
-				}
-				break
+				return
 			}
 		}
 	}

@@ -31,6 +31,7 @@ func WiresharkWriter(snapLen uint32) (*Wireshark, error) {
 
 	w.writer = wiresharkWriter{
 		wireshark:        w,
+		connectionClosed: make(chan bool),
 	}
 
 	appChan := make(chan bool)
@@ -91,7 +92,6 @@ func WiresharkWriter(snapLen uint32) (*Wireshark, error) {
 
 func (w *Wireshark) processConnection(appChan chan bool) error {
 	wiresharkAddr := log.Fields{"addr": w.conn.LocalAddr().String(), "remote": w.conn.RemoteAddr().String()}
-	w.writer.connectionClosed = make(chan bool)
 
 	fmt.Println("Starting wireshark dump")
 
@@ -100,11 +100,13 @@ func (w *Wireshark) processConnection(appChan chan bool) error {
 		select {
 		case <-appChan:
 			log.WithFields(wiresharkAddr).Debug("Wireshark closed")
+			fmt.Println("Stopped dump from wireshark")
 			close(w.DoCapture)
 			return io.EOF
 
 		case <-w.writer.connectionClosed:
 			log.WithFields(wiresharkAddr).Debug("Wireshark stopped dump")
+			fmt.Println("Stopped dump from wireshark")
 			close(w.DoCapture)
 			return nil
 
