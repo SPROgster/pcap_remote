@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/SPROgster/libpcap_remote/v3/pb"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -92,7 +93,7 @@ func (w *Wireshark) processConnection(appChan chan bool) error {
 	wiresharkAddr := log.Fields{"addr": w.conn.LocalAddr().String(), "remote": w.conn.RemoteAddr().String()}
 	w.writer.connectionClosed = make(chan bool)
 
-	log.Info("Starting wireshark dump")
+	fmt.Println("Starting wireshark dump")
 
 	for {
 		// Check if wiresharkApp wiresharkApp closed
@@ -111,7 +112,7 @@ func (w *Wireshark) processConnection(appChan chan bool) error {
 				return io.EOF
 			}
 			if err := w.pcapFormat.WritePacket(packet); err == io.EOF {
-				log.Info("Stopped dump from wireshark")
+				fmt.Println("Stopped dump from wireshark")
 				w.DoCapture <- false
 				close(w.DoCapture)
 				return io.EOF
