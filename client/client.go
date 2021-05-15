@@ -70,19 +70,11 @@ func (c *client) startDump(cw *captureWork) {
 	}
 
 	go func() {
-		ctx = receiver.Context()
-		for {
-			packet, err := receiver.Recv()
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				if err != nil {
-					log.WithField("error", err).Fatal("Error occurred")
-				}
-				cw.stream <- packet
-			}
+		packet, err := receiver.Recv()
+		if err != nil {
+			log.WithField("error", err).Fatal("Error occurred")
 		}
+		cw.stream <- packet
 	}()
 
 	select {
@@ -221,6 +213,8 @@ func initConfig() {
 
 func main() {
 	initConfig()
+
+	log.SetLevel(log.DebugLevel)
 
 	c := cli.NewCli()
 
