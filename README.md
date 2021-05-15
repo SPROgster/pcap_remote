@@ -16,25 +16,27 @@ Client app uses GRPC for libpcap call on remote hosts
 3. Start client app
 4. Add remote hosts with running daemon to local config:
 ```
-devices add remote1 192.0.2.1
-devices add remote2 192.0.2.2
+>>> devices add remote1 192.0.2.1
+>>> devices add remote2 192.0.2.2
 ```
 or do it by group
 ```
-devices add remote1 192.0.2.1 remote2 192.0.2.2
+>>> devices add remote1 192.0.2.1 remote2 192.0.2.2
 ```
 5. Set interface to capture (must be same on all devices)
 ```
-interface any
+>>> interface any
 ```
 Default: any
+
 6. Set pcap-filter
 ```
-pcap-filter tcp port 443
+>>> pcap-filter tcp port 443
 ```
 Default: ""
+
 7. Start capture
 ```
-start
+>>> start
 ```
 8. After done, press stop button in wireshark and/or close it
