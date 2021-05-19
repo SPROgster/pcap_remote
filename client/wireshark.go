@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/SPROgster/libpcap_remote/v3/pb"
+	"github.com/SPROgster/libpcap_remote/pb"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net"

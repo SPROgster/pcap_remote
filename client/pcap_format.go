@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/SPROgster/libpcap_remote/v3/pb"
+	"github.com/SPROgster/libpcap_remote/pb"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"

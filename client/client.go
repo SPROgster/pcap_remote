@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/AlexsJones/cli/cli"
 	"github.com/AlexsJones/cli/command"
-	"github.com/SPROgster/libpcap_remote/v3/pb"
+	"github.com/SPROgster/libpcap_remote/pb"
 	"github.com/gobuffalo/envy"
 	uuid "github.com/nu7hatch/gouuid"
 	log "github.com/sirupsen/logrus"

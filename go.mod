@@ -1,4 +1,4 @@
-module github.com/SPROgster/libpcap_remote/v3
+module github.com/SPROgster/libpcap_remote
 
 go 1.14
 

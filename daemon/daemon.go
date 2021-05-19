@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"github.com/SPROgster/libpcap_remote/v3/pb"
+	"github.com/SPROgster/libpcap_remote/pb"
 	"github.com/gobuffalo/envy"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
