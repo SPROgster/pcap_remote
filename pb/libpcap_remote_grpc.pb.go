@@ -197,5 +197,5 @@ var PcapRemoteService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "pb/libpcap_remote.proto",
+	Metadata: "libpcap_remote.proto",
 }

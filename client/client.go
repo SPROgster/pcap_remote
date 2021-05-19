@@ -48,6 +48,7 @@ var (
 	pcapfilter = ""
 	promisc    = false
 	snaplen    = uint32(9000)
+	direction  = pb.Direction_INOUT
 )
 
 func (cw *captureWork) sendPacket(packet *pb.Packet) {
@@ -71,6 +72,7 @@ func (cwe *captureWorkJob) startDump(cw *captureWork) {
 		SnapshotLen: snaplen,
 		Promiscuous: promisc,
 		PcapFilter:  pcapfilter,
+		Direction:   direction,
 	})
 	if err != nil {
 		log.WithField("addr", cwe.c.Address).Error(err)
@@ -360,6 +362,33 @@ func main() {
 		Help: "",
 		Func: func(args []string) {
 			promisc = false
+		},
+	})
+
+	// Direction inout
+	c.AddCommand(command.Command{
+		Name: "direction inout",
+		Help: "Send/receive direction direction for which packets should be captured",
+		Func: func(args []string) {
+			direction = pb.Direction_INOUT
+		},
+	})
+
+	// Direction in
+	c.AddCommand(command.Command{
+		Name: "direction in",
+		Help: "",
+		Func: func(args []string) {
+			direction = pb.Direction_IN
+		},
+	})
+
+	// Direction out
+	c.AddCommand(command.Command{
+		Name: "direction out",
+		Help: "",
+		Func: func(args []string) {
+			direction = pb.Direction_OUT
 		},
 	})
 

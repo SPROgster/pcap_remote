@@ -94,6 +94,18 @@ func (d *daemon) StartCapture(request *pb.StartCaptureRequest, stream pb.PcapRem
 	}
 	defer handle.Close()
 
+	switch request.Direction {
+	case pb.Direction_INOUT:
+		err = handle.SetDirection(pcap.DirectionInOut)
+	case pb.Direction_IN:
+		err = handle.SetDirection(pcap.DirectionIn)
+	case pb.Direction_OUT:
+		err = handle.SetDirection(pcap.DirectionOut)
+	}
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+
 	log.WithFields(log.Fields{"device": request.Device, "pcap-filter": request.PcapFilter}).Debug("Opened live")
 
 	// Set filter

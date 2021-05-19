@@ -28,6 +28,13 @@ message StartCaptureRequest {
   uint32 snapshot_len = 3;
   bool promiscuous = 4;
   string pcap_filter = 5;
+  Direction direction = 6;
+}
+
+enum Direction {
+  INOUT = 0;
+  IN = 1;
+  OUT = 2;
 }
 
 message StopCaptureRequest {
