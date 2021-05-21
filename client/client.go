@@ -264,6 +264,11 @@ func main() {
 		Name: "start",
 		Help: "start packet capture",
 		Func: func(args []string) {
+			if len(args) != 0 {
+				fmt.Println("Extra arguments")
+				return
+			}
+
 			startCapture()
 		},
 	})
@@ -347,83 +352,131 @@ func main() {
 		},
 	})
 
-	// Promisc true
+	// Promisc
 	c.AddCommand(command.Command{
-		Name: "promisc true",
+		Name: "promisc",
 		Help: "",
 		Func: func(args []string) {
-			promisc = true
+			if len(args) != 0 {
+				fmt.Println("Extra arguments")
+			}
+
+			fmt.Println("Promisc: ", promisc)
+		},
+		SubCommands: []command.Command{
+			{
+				Name: "true",
+				Help: "",
+				Func: func(args []string) {
+					if len(args) != 0 {
+						fmt.Println("Extra arguments")
+					}
+
+					promisc = true
+				},
+			},
+			{
+				Name: "false",
+				Help: "",
+				Func: func(args []string) {
+					if len(args) != 0 {
+						fmt.Println("Extra arguments")
+					}
+
+					promisc = false
+				},
+			},
 		},
 	})
 
-	// Promisc false
+	// Direction
 	c.AddCommand(command.Command{
-		Name: "promisc false",
-		Help: "",
-		Func: func(args []string) {
-			promisc = false
-		},
-	})
-
-	// Direction inout
-	c.AddCommand(command.Command{
-		Name: "direction inout",
+		Name: "direction",
 		Help: "Send/receive direction direction for which packets should be captured",
 		Func: func(args []string) {
+			if len(args) != 0 {
+				fmt.Println("Extra arguments")
+			}
+
 			direction = pb.Direction_INOUT
 		},
-	})
+		SubCommands: []command.Command{
+			{
+				Name: "inout",
+				Help: "Send/receive direction direction for which packets should be captured",
+				Func: func(args []string) {
+					if len(args) != 0 {
+						fmt.Println("Extra arguments")
+					}
 
-	// Direction in
-	c.AddCommand(command.Command{
-		Name: "direction in",
-		Help: "",
-		Func: func(args []string) {
-			direction = pb.Direction_IN
-		},
-	})
+					direction = pb.Direction_INOUT
+				},
+			},
+			{
+				Name: "in",
+				Help: "",
+				Func: func(args []string) {
+					if len(args) != 0 {
+						fmt.Println("Extra arguments")
+					}
 
-	// Direction out
-	c.AddCommand(command.Command{
-		Name: "direction out",
-		Help: "",
-		Func: func(args []string) {
-			direction = pb.Direction_OUT
+					direction = pb.Direction_IN
+				},
+			},
+			{
+				Name: "out",
+				Help: "",
+				Func: func(args []string) {
+					if len(args) != 0 {
+						fmt.Println("Extra arguments")
+					}
+
+					direction = pb.Direction_OUT
+				},
+			},
 		},
 	})
 
 	// Config
 	c.AddCommand(command.Command{
-		Name: "config save",
+		Name: "config",
 		Help: "",
 		Func: func(args []string) {
-			if len(args) != 0 {
-				fmt.Println("Extra arguments")
-				return
-			}
-
-			dl := make(DeviceList, len(clientList))
-			for n, v := range clientList {
-				dl[n] = v.DeviceDescription
-			}
-			c := &Config{
-				Devices: dl,
-			}
-			if err := c.Save(); err != nil {
-				fmt.Println(err)
-			}
+			fmt.Println("Invalid command")
 		},
-	})
+		SubCommands: []command.Command{
+			{
+				Name: "save",
+				Help: "",
+				Func: func(args []string) {
+					if len(args) != 0 {
+						fmt.Println("Extra arguments")
+						return
+					}
 
-	c.AddCommand(command.Command{
-		Name: "config load",
-		Func: func(args []string) {
-			if len(args) != 0 {
-				fmt.Println("Extra arguments")
-				return
-			}
+					dl := make(DeviceList, len(clientList))
+					for n, v := range clientList {
+						dl[n] = v.DeviceDescription
+					}
+					c := &Config{
+						Devices: dl,
+					}
+					if err := c.Save(); err != nil {
+						fmt.Println(err)
+					}
+				},
+			},
+			{
+				Name: "load",
+				Func: func(args []string) {
+					if len(args) != 0 {
+						fmt.Println("Extra arguments")
+						return
+					}
 
-			initConfig()
+					initConfig()
+				},
+			},
 		},
 	})
 
