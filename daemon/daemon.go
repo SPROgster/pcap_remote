@@ -88,7 +88,30 @@ func (d *daemon) StartCapture(request *pb.StartCaptureRequest, stream pb.PcapRem
 	}
 
 	// Open device
-	handle, err := pcap.OpenLive(request.Device, int32(request.SnapshotLen), request.Promiscuous, pcap.BlockForever)
+	inactiveHandle, err := pcap.NewInactiveHandle(request.Device)
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+
+	err = inactiveHandle.SetPromisc(request.Promiscuous)
+	if err != nil {
+		inactiveHandle.CleanUp()
+		return status.Error(codes.Internal, err.Error())
+	}
+
+	err = inactiveHandle.SetSnapLen(int(request.SnapshotLen))
+	if err != nil {
+		inactiveHandle.CleanUp()
+		return status.Error(codes.Internal, err.Error())
+	}
+
+	err = inactiveHandle.SetTimeout(pcap.BlockForever)
+	if err != nil {
+		inactiveHandle.CleanUp()
+		return status.Error(codes.Internal, err.Error())
+	}
+
+	handle, err := inactiveHandle.Activate()
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
